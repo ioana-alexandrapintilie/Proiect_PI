@@ -127,7 +127,7 @@ PROIECT_COD/
    pip install tensorflow opencv-python numpy pandas matplotlib imageio termcolor
    ```
 2. Se descarcă setul HC18 și se pune în `Data/HC18/` ca în structura de mai sus.
-3. Modelul antrenat nu este inclus în repository din cauza dimensiunii: **[link Google Drive, de completat]**. Se pune în folderul proiectului cu numele `unet_fetal_head.keras`. Alternativ, se antrenează cu `python main.py`.
+3. Modelul antrenat nu este inclus în repository din cauza dimensiunii: [Descarca modelul unet_fetal_head.keras](https://drive.google.com/file/d/1Uj8XbMepR972A-L0mNBIk3nIzCCBamMf/view?usp=sharing). Se pune în folderul proiectului cu numele `unet_fetal_head.keras`. Alternativ, se antrenează cu `python main.py`.
 4. Demonstrația fluxului complet: `python demo.py`
 5. Evaluările:
    - segmentare: rezultatele se scriu în `validation_metrics.txt` și `test_metrics.txt` la rularea `main.py`;
