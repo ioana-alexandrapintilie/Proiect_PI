@@ -4,12 +4,12 @@ import matplotlib.pyplot as plt
 from biometrie import (incarca, extrage_contururi, selecteaza_contur,
                        potriveste_elipsa, FOLDER_FIGURI)
 
-IMAGINI = ["000_HC.png", "022_HC.png", "100_HC.png",
-           "300_HC.png", "637_HC.png", "805_HC.png"]
+IMAGINI = ["000_HC.png", "022_HC.png", "100_HC.png", "200_HC.png", "300_HC.png",
+           "400_HC.png", "500_HC.png", "637_HC.png", "700_HC.png", "805_HC.png"]
 
 
 def test_elipsa(nume_imagini):
-    fig, axe = plt.subplots(2, 3, figsize=(15, 8))
+    fig, axe = plt.subplots(2, 5, figsize=(24,9))
     for ax, nume in zip(axe.flat, nume_imagini):
         img, masca = incarca(nume)
         arie_imagine = masca.shape[0] * masca.shape[1]

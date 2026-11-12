@@ -47,9 +47,13 @@ def dim_img():
     for dim, nr in dimensiuni.items():
         print(" ", dim, " ", nr)
 
-
+def tabel_exemple(n=10, cale_csv=CSV):
+    df = pd.read_csv(cale_csv)
+    print(f"\nPrimele {n} imagini cu calibrarea si HC de referinta:")
+    print(df.head(n).to_string(index=False))
 if __name__ == "__main__":
     cal = citeste_calibrare()
     verifica_potrivire(cal)
     statistici()
     dim_img()
+    tabel_exemple()

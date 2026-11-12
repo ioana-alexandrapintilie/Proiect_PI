@@ -2,7 +2,7 @@ import os
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-
+import math
 from data_loader import fill_annotation
 from calibrare import citeste_calibrare, FOLDER
 
@@ -60,12 +60,35 @@ def potriveste_elipsa(contur):
     # elipsa are forma centru diametre unghi
     return cv2.fitEllipse(contur)
 
-
+def perimetru_elipsa(d1, d2):
+    # fitEllipse da diametrele deci impart la 2 ca sa obtin semiaxele
+    a = d1 / 2
+    b = d2 / 2
+    # aproximarea lui Ramanujan-calculul perimetrului elipsei
+    return math.pi * (3 * (a + b) - math.sqrt((3 * a + b) * (a + 3 * b)))
+def calculeaza_hc(masca,pixel_size,dim_originala):
+    #dim mastii primite si cele ale img originale
+    h_masca, w_masca=masca.shape[:2]
+    h_orig,w_orig=dim_originala
+    #cati mm acopera un pixel al mastii pe fiecare axa
+    sx=pixel_size*w_orig/w_masca
+    sy=pixel_size*h_orig/h_masca
+    #contur
+    contur=selecteaza_contur(extrage_contururi(masca),h_masca*w_masca)
+    if contur is None:
+        return {"hc_mm":None,"motiv":"nu exista un cap plauzibil in masca"}
+    #transform fiecare pct din px in mm
+    puncte_mm=contur.reshape(-1,2).astype(np.float32)*np.array([sx,sy],dtype=np.float32)
+    elipsa_mm=potriveste_elipsa(puncte_mm)
+    if elipsa_mm is None:
+        return {"hc_mm": None,"motiv":"contur prea mic pentru o elipsa"}
+    (_,_),(d1,d2),_=elipsa_mm
+    return {"hc_mm": perimetru_elipsa(d1, d2),"axa_mica_mm": min(d1, d2),"axa_mare_mm": max(d1, d2),"motiv": None}
 # TESTE VIZUALE
 
 def test_contur(nume_imagini):
     cal = citeste_calibrare()
-    fig, axe = plt.subplots(2, 3, figsize=(15, 8))
+    fig, axe = plt.subplots(2, 5, figsize=(24, 9))
 
     for ax, nume in zip(axe.flat, nume_imagini):
         img, masca = incarca(nume)
@@ -93,5 +116,5 @@ def test_contur(nume_imagini):
 
 
 if __name__ == "__main__":
-    test_contur(["000_HC.png", "022_HC.png", "100_HC.png",
-                 "300_HC.png", "637_HC.png", "805_HC.png"])
+    test_contur(["000_HC.png", "022_HC.png", "100_HC.png", "200_HC.png", "300_HC.png",
+           "400_HC.png", "500_HC.png", "637_HC.png", "700_HC.png", "805_HC.png"])
