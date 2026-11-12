@@ -1,139 +1,73 @@
-import numpy as np
-from termcolor import colored
-
-from tensorflow.keras.layers import Input
-from tensorflow.keras.layers import Conv2D
-from tensorflow.keras.layers import MaxPooling2D
-from tensorflow.keras.layers import Dropout
-from tensorflow.keras.layers import Conv2DTranspose
-from tensorflow.keras.layers import concatenate
-def comparator(learner, instructor):
-    if len(learner) != len(instructor):
-        raise AssertionError(f"The number of layers in the proposed model does not agree with the expected model: expected {len(instructor)}, got {len(learner)}.")
-    for a, b in zip(learner, instructor):
-        if tuple(a) != tuple(b):
-            print(colored("Test failed", attrs=['bold']),
-                  "\n Expected value \n\n", colored(f"{b}", "green"),
-                  "\n\n does not match the input value: \n\n",
-                  colored(f"{a}", "red"))
-            raise AssertionError("Error in test")
-    print(colored("All tests passed!", "green"))
-def summary(model):
-    result = []
-    for layer in model.layers:
-        # Safely get the output shape
-        try:
-            output_shape = layer.output.shape
-        except AttributeError:
-            output_shape = getattr(layer, 'batch_input_shape', 'unknown')
-
-        # Safely get parameters
-        try:
-            params = layer.count_params()
-        except:
-            params = 0
-
-        descriptors = [layer.__class__.__name__, output_shape, params]
-
-        if isinstance(layer, Conv2D):
-            descriptors.append(layer.padding)
-            descriptors.append(layer.activation.__name__)
-            descriptors.append(layer.kernel_initializer.__class__.__name__)
-        if isinstance(layer, MaxPooling2D):
-            descriptors.append(layer.pool_size)
-        if isinstance(layer, Dropout):
-            descriptors.append(layer.rate)
-
-        result.append(descriptors)
-    return result
-
-from unet import unet_model, unet
-
-import tensorflow as tf
-import numpy as np
 import os
-import imageio
-import matplotlib.pyplot as plt
-from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Dropout, Conv2DTranspose, concatenate
-from tensorflow.keras import Model
-import cv2
-# from google.colab import drive
+import tensorflow as tf
+
+from config import (SEED, image_path, mask_path, EPOCHS, BUFFER_SIZE, BATCH_SIZE,
+                    set_seeds, save_config, split_train_val_test)
+from data_loader import process_path
+from preprocessing import preprocess
+from unet import build_model
+from metrice import DiceMetric, evaluate_dataset
+from evaluate import (display, show_predictions, save_training_log,
+                      plot_training_history)
+
+MODEL_PATH = "unet_fetal_head.keras"
+PATIENCE = 8
+
+set_seeds()
+
+# 1 lista perechilor imagine masca si verificarea lor
+image_list = sorted([os.path.join(image_path, f) for f in os.listdir(image_path)
+                     if f.endswith(".png") and not f.endswith("_Annotation.png")])
+mask_list = sorted([os.path.join(mask_path, f) for f in os.listdir(mask_path)
+                    if f.endswith("_Annotation.png")])
+
+assert len(image_list) == len(mask_list), "Numar diferit de imagini si masti"
+for img_p, msk_p in zip(image_list, mask_list):
+    assert os.path.basename(img_p).replace(".png", "") == \
+           os.path.basename(msk_p).replace("_Annotation.png", ""), \
+           f"Nepotrivire: {img_p} / {msk_p}"
+print(f"OK: {len(image_list)} perechi verificate")
+
+save_config(image_list, mask_list)
+
+# 2 impartirea train validation test dupa pacient
+train_images, train_masks, val_images, val_masks, test_images, test_masks = \
+    split_train_val_test(image_list, mask_list)
 
 
-# drive.mount('/content/drive')
-
-image_path = r"Data/HC18/training_set"
-mask_path = r"Data/HC18/training_set"
-image_list = [os.path.join(image_path, f) for f in os.listdir(image_path) if f.endswith('.png') and not f.endswith('_Annotation.png')]
-mask_list = [os.path.join(mask_path, f) for f in os.listdir(mask_path) if f.endswith('_Annotation.png')]
-
-image_list.sort()
-mask_list.sort()
-N = 2
-img = imageio.imread(image_list[N])
-mask = imageio.imread(mask_list[N])
-
-fig, arr = plt.subplots(1, 2, figsize=(14, 10))
-arr[0].imshow(img)
-arr[0].set_title('Image')
-arr[0].axis('off')
-
-if mask.ndim == 3:
-    arr[1].imshow(mask[:, :, 0], cmap='gray')
-else:
-    arr[1].imshow(mask, cmap='gray')
-arr[1].set_title('Segmentation')
-arr[1].axis('off')
-plt.tight_layout()
-plt.show()
-image_list_ds = tf.data.Dataset.list_files(image_list, shuffle=False)
-mask_list_ds = tf.data.Dataset.list_files(mask_list, shuffle=False)
-
-for path in zip(image_list_ds.take(3), mask_list_ds.take(3)):
-    print(path)
-
-image_filenames = tf.constant(image_list)
-masks_filenames = tf.constant(mask_list)
-
-dataset = tf.data.Dataset.from_tensor_slices((image_filenames, masks_filenames))
-
-for image, mask in dataset.take(1):
-    print(image)
-    print(mask)
-
-from preprocessing import image_ds, processed_image_ds
+def make_dataset(images, masks):
+    return tf.data.Dataset.from_tensor_slices(
+        (tf.constant(images), tf.constant(masks))).map(process_path).map(preprocess)
 
 
-def display(display_list):
-    plt.figure(figsize=(15, 15))
+train_dataset = make_dataset(train_images, train_masks).cache() \
+    .shuffle(BUFFER_SIZE, seed=SEED).batch(BATCH_SIZE)
+val_dataset = make_dataset(val_images, val_masks).cache().batch(BATCH_SIZE)
+test_dataset = make_dataset(test_images, test_masks).batch(BATCH_SIZE)
 
-    title = ['Input Image', 'True Mask', 'Predicted Mask']
+# 3 modelul nou de la zero
+unet = build_model()
+unet.summary()
 
-    for i in range(len(display_list)):
-        plt.subplot(1, len(display_list), i+1)
-        plt.title(title[i])
-        plt.imshow(tf.keras.preprocessing.image.array_to_img(display_list[i]))
-        plt.axis('off')
-    plt.show()
-for image, mask in image_ds.take(1):
-    sample_image, sample_mask = image, mask
-    print(mask.shape)
-display([sample_image, sample_mask])
-#new
+# 4 antrenare cu oprire automata si salvarea celui mai bun model
+callbacks = [
+    tf.keras.callbacks.EarlyStopping(monitor="val_dice", mode="max",
+                                     patience=PATIENCE, restore_best_weights=True),
+    tf.keras.callbacks.ModelCheckpoint(MODEL_PATH, monitor="val_dice",
+                                       mode="max", save_best_only=True),
+]
 
-for image, mask in processed_image_ds.take(1):
-    sample_image, sample_mask = image, mask
-    print(mask.shape)
-display([sample_image, sample_mask])
+model_history = unet.fit(train_dataset, epochs=EPOCHS,
+                         validation_data=val_dataset, callbacks=callbacks)
+save_training_log(model_history)
 
+# 5 reincarc cel mai bun model salvat si il evaluez
+best = tf.keras.models.load_model(MODEL_PATH, custom_objects={"DiceMetric": DiceMetric})
+print(f"\nCel mai bun model a fost salvat in: {MODEL_PATH}")
 
-EPOCHS = 5
-VAL_SUBSPLITS = 5
-BUFFER_SIZE = 500
-BATCH_SIZE = 32
-processed_image_ds.batch(BATCH_SIZE)
-train_dataset = processed_image_ds.cache().shuffle(BUFFER_SIZE).batch(BATCH_SIZE)
-print(processed_image_ds.element_spec)
-model_history = unet.fit(train_dataset, epochs=EPOCHS)
+val_dice, val_iou = evaluate_dataset(best, val_dataset)
+test_dice, test_iou = evaluate_dataset(best, test_dataset, path="test_metrics.txt")
 
-from evaluate import create_mask, show_predictions
+# 6 graficele la final ca sa nu opreasca antrenarea
+plot_training_history(model_history)
+show_predictions(best, display, test_dataset, 3)

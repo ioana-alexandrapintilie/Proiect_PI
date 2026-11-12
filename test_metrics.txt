@@ -1,0 +1,3 @@
+imagini_evaluate=100
+dice=0.9698
+iou=0.9438

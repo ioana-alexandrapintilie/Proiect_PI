@@ -3,7 +3,11 @@ import cv2
 import numpy as np
 
 def fill_annotation(path):
-    ann = cv2.imread(path.decode(), cv2.IMREAD_GRAYSCALE)
+    if hasattr(path, 'item'):
+        path_str = path.item().decode()
+    else:
+        path_str = path.decode()
+    ann = cv2.imread(path_str, cv2.IMREAD_GRAYSCALE)
     contours, _ = cv2.findContours((ann > 127).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     mask = np.zeros_like(ann)
     cv2.drawContours(mask, contours, -1, 1, thickness=cv2.FILLED)
