@@ -2,7 +2,7 @@ import numpy as np
 from termcolor import colored
 
 from tensorflow.keras.layers import Input
-
+from evaluate import create_mask, plot_history, show_predictions, display
 from config import (SEED, image_path, mask_path, EPOCHS,
                     VAL_SUBSPLITS, BUFFER_SIZE, BATCH_SIZE,
                     set_seeds, save_config, split_train_val)
@@ -38,8 +38,10 @@ for img_p, msk_p in zip(image_list, mask_list):
            f"Nepotrivire: {img_p} / {msk_p}"
 print(f"OK: {len(image_list)} perechi verificate")
 
-save_config(image_list, mask_list)
-train_images, train_masks, val_images, val_masks = split_train_val(image_list, mask_list)
+from config import split_train_val_test
+train_images, train_masks, val_images, val_masks, test_images, test_masks = \
+    split_train_val_test(image_list, mask_list)
+
 N = 2
 img = imageio.imread(image_list[N])
 mask = imageio.imread(mask_list[N])
@@ -72,20 +74,12 @@ for image, mask in dataset.take(1):
     print(image)
     print(mask)
 
-from preprocessing import image_ds, processed_image_ds
+from data_loader import process_path
+from preprocessing import preprocess
 
+image_ds = dataset.map(process_path)
+processed_image_ds = image_ds.map(preprocess)
 
-def display(display_list):
-    plt.figure(figsize=(15, 15))
-
-    title = ['Input Image', 'True Mask', 'Predicted Mask']
-
-    for i in range(len(display_list)):
-        plt.subplot(1, len(display_list), i+1)
-        plt.title(title[i])
-        plt.imshow(tf.keras.preprocessing.image.array_to_img(display_list[i]))
-        plt.axis('off')
-    plt.show()
 for image, mask in image_ds.take(1):
     sample_image, sample_mask = image, mask
     print(mask.shape)
@@ -108,12 +102,27 @@ val_ds = tf.data.Dataset.from_tensor_slices(
 processed_image_ds.batch(BATCH_SIZE)
 train_dataset = train_ds.cache().shuffle(BUFFER_SIZE, seed=SEED).batch(BATCH_SIZE)
 val_dataset = val_ds.batch(BATCH_SIZE)
+
+test_ds = tf.data.Dataset.from_tensor_slices(
+    (tf.constant(test_images), tf.constant(test_masks))).map(process_path).map(preprocess)
+test_dataset = test_ds.batch(BATCH_SIZE)
+
 print(processed_image_ds.element_spec)
 model_history = unet.fit(train_dataset, epochs=EPOCHS, validation_data=val_dataset)
 
 from metrice import evaluate_dataset
 val_dice, val_iou = evaluate_dataset(unet, val_dataset)
-from evaluate import create_mask, plot_history, show_predictions
 
 plot_history(model_history)
 show_predictions(unet, display, train_dataset, 6)
+
+from evaluate import save_training_log, plot_training_history
+save_training_log(model_history)
+plot_training_history(model_history)
+
+test_dice, test_iou = evaluate_dataset(unet, test_dataset, path="test_metrics.txt")
+
+
+model_save_path = "unet_fetal_head.keras"
+unet.save(model_save_path)
+print(f"\n Modelul antrenat a fost salvat in: {model_save_path}")

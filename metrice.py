@@ -1,5 +1,5 @@
 import numpy as np
-
+import tensorflow as tf
 
 def dice_score(y_true, y_pred):
     y_true = np.asarray(y_true).astype(bool)
@@ -40,3 +40,27 @@ def evaluate_dataset(model, dataset, path="validation_metrics.txt"):
 
     print(f"Validare ({len(dices)} imagini): Dice={mean_dice:.4f}, IoU={mean_iou:.4f}")
     return mean_dice, mean_iou
+
+class DiceMetric(tf.keras.metrics.Metric):
+    """Dice per imagine, mediat pe imagini (clasa 1 = capul fetal)."""
+
+    def __init__(self, name="dice", **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.dice_sum = self.add_weight(name="dice_sum", initializer="zeros")
+        self.count = self.add_weight(name="count", initializer="zeros")
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        true = tf.cast(y_true[..., 0], tf.float32)                          # (B, H, W)
+        pred = tf.cast(tf.argmax(y_pred, axis=-1) == 1, tf.float32)         # (B, H, W)
+        inter = tf.reduce_sum(true * pred, axis=[1, 2])
+        total = tf.reduce_sum(true, axis=[1, 2]) + tf.reduce_sum(pred, axis=[1, 2])
+        dice = tf.where(total == 0, 1.0, 2.0 * inter / tf.maximum(total, 1.0))
+        self.dice_sum.assign_add(tf.reduce_sum(dice))
+        self.count.assign_add(tf.cast(tf.shape(dice)[0], tf.float32))
+
+    def result(self):
+        return tf.math.divide_no_nan(self.dice_sum, self.count)
+
+    def reset_state(self):
+        self.dice_sum.assign(0.0)
+        self.count.assign(0.0)

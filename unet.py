@@ -3,7 +3,7 @@ from tensorflow.keras.layers import (
     Input, Conv2D, MaxPooling2D,
     Dropout, Conv2DTranspose, concatenate
 )
-
+from metrice import DiceMetric
 
 def conv_block(inputs=None, n_filters=32, dropout_prob=0, max_pooling=True):
     conv = Conv2D(n_filters,
@@ -83,5 +83,5 @@ def build_model():
     unet = unet_model((img_height, img_width, num_channels))
     unet.compile(optimizer='adam',
                  loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
-                 metrics=['accuracy'])
+                 metrics=['accuracy', DiceMetric()])
     return unet
